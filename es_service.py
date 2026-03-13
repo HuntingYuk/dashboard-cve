@@ -1,4 +1,5 @@
 import os
+import elasticsearch
 from elasticsearch import Elasticsearch
 import urllib3
 import pandas as pd
@@ -9,7 +10,17 @@ load_dotenv()
 # Suppress InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+def _validate_elasticsearch_client_version():
+    version = getattr(elasticsearch, "__version__", None)
+    major = version[0] if isinstance(version, tuple) and version else None
+    if major != 8:
+        raise RuntimeError(
+            "Installed elasticsearch client is incompatible with Elasticsearch 8.x. "
+            "Install a version in the 8.x series, for example: pip install 'elasticsearch>=8.17.0,<9'"
+        )
+
 def get_es_client():
+    _validate_elasticsearch_client_version()
     url = os.getenv("ES_URL")
     username = os.getenv("ES_USERNAME")
     password = os.getenv("ES_PASSWORD")

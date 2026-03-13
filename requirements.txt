@@ -1,7 +1,7 @@
 streamlit
-elasticsearch
+elasticsearch>=8.17.0,<9
 pandas
 plotly
 python-dotenv
-urllib3
+urllib3<2
 watchdog
