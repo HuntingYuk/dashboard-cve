@@ -4,8 +4,10 @@ from elasticsearch import Elasticsearch
 import urllib3
 import pandas as pd
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / ".env")
 
 # Suppress InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -21,17 +23,38 @@ def _validate_elasticsearch_client_version():
 
 def get_es_client():
     _validate_elasticsearch_client_version()
-    url = os.getenv("ES_URL")
-    username = os.getenv("ES_USERNAME")
-    password = os.getenv("ES_PASSWORD")
-    
-    # Create the client with SSL verification disabled
-    client = Elasticsearch(
-        url,
-        basic_auth=(username, password),
-        verify_certs=False,
-        ssl_show_warn=False
-    )
+    url = os.getenv("ES_URL", "").strip()
+    cloud_id = os.getenv("ES_CLOUD_ID", "").strip()
+    username = os.getenv("ES_USERNAME", "").strip()
+    password = os.getenv("ES_PASSWORD", "").strip()
+
+    if not url and not cloud_id:
+        raise RuntimeError(
+            "Missing Elasticsearch connection config. Set one of ES_URL or ES_CLOUD_ID in .env"
+        )
+
+    missing_auth = []
+    if not username:
+        missing_auth.append("ES_USERNAME")
+    if not password:
+        missing_auth.append("ES_PASSWORD")
+    if missing_auth:
+        raise RuntimeError(
+            f"Missing Elasticsearch credential(s): {', '.join(missing_auth)}"
+        )
+
+    if cloud_id:
+        client = Elasticsearch(
+            cloud_id=cloud_id,
+            basic_auth=(username, password),
+        )
+    else:
+        client = Elasticsearch(
+            url,
+            basic_auth=(username, password),
+            verify_certs=False,
+            ssl_show_warn=False,
+        )
     return client
 
 def _build_bool_query(search_text=None, severity_filter=None, date_filter=None, date_field="published", score_range=(0, 10), kev_filter=False, epss_range=(0, 1), vendor_filter=None, product_filter=None, cvss_version_filter=None, status_filter=None, year_filter=None):
