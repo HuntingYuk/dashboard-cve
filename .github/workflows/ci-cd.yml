@@ -47,9 +47,25 @@ jobs:
       - name: Lint GitHub Actions workflow
         uses: raven-actions/actionlint@v2
 
-      - name: Security scan (Trivy)
-        id: trivy
-        continue-on-error: true
+      - name: Security scan (Trivy) - generate SARIF report
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: sarif
+          output: trivy-results.sarif
+
+      - name: Upload Trivy scan results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Security scan (Trivy) - gate on vulnerabilities
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
@@ -58,18 +74,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
-          format: sarif
-          output: ${{ github.workspace }}/trivy-results.sarif
-
-      - name: Upload Trivy scan results to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: ${{ github.workspace }}/trivy-results.sarif
-
-      - name: Fail if Trivy found vulnerabilities
-        if: steps.trivy.outcome == 'failure'
-        run: exit 1
+          format: table
 
   build-and-push:
     if: github.event_name == 'push'
@@ -103,10 +108,12 @@ jobs:
           IMAGE_REF="${IMAGE_REPO}:${VERSION}"
           LATEST_REF="${IMAGE_REPO}:latest"
 
-          echo "app_name=${APP_NAME}" >> "$GITHUB_OUTPUT"
-          echo "image_ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "latest_ref=${LATEST_REF}" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_name=${APP_NAME}"
+            echo "image_ref=${IMAGE_REF}"
+            echo "version=${VERSION}"
+            echo "latest_ref=${LATEST_REF}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -126,6 +133,17 @@ jobs:
           tags: |
             ${{ steps.image_meta.outputs.image_ref }}
             ${{ steps.image_meta.outputs.latest_ref }}
+
+      - name: Security scan (Trivy) - image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image_meta.outputs.image_ref }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
 
   update-manifest:
     if: github.event_name == 'push'
