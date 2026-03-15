@@ -7,9 +7,6 @@ on:
       - master
   pull_request:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 permissions:
   contents: read
   packages: write
@@ -21,9 +18,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           python-version: "3.12"
 
@@ -47,34 +48,22 @@ jobs:
       - name: Lint GitHub Actions workflow
         uses: raven-actions/actionlint@v2
 
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Security scan (Trivy) - generate SARIF report
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
-          format: sarif
-          output: trivy-results.sarif
+        run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --format sarif --output trivy-results.sarif . || true
 
       - name: Upload Trivy scan results to GitHub Security
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Security scan (Trivy) - gate on vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          format: table
+        run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --format table .
 
   build-and-push:
     if: github.event_name == 'push'
@@ -87,6 +76,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Set image metadata
         id: image_meta
@@ -115,6 +106,9 @@ jobs:
             echo "latest_ref=${LATEST_REF}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -135,15 +129,9 @@ jobs:
             ${{ steps.image_meta.outputs.latest_ref }}
 
       - name: Security scan (Trivy) - image scan
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: image
-          image-ref: ${{ steps.image_meta.outputs.image_ref }}
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          format: table
+        run: |
+          docker pull ${{ steps.image_meta.outputs.image_ref }}
+          trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --format table ${{ steps.image_meta.outputs.image_ref }}
 
   update-manifest:
     if: github.event_name == 'push'
@@ -159,6 +147,8 @@ jobs:
       - name: Checkout manifest repo
         if: ${{ env.MANIFEST_REPO_TOKEN != '' }}
         uses: actions/checkout@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           repository: HuntingYuk/k3s-manifest
           token: ${{ env.MANIFEST_REPO_TOKEN }}
