@@ -3,5 +3,5 @@ elasticsearch>=8.17.0,<9
 pandas
 plotly
 python-dotenv
-urllib3<2
+urllib3>=2.6.3,<3
 watchdog
