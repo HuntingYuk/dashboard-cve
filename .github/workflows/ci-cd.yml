@@ -188,22 +188,23 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     env:
-      MANIFEST_REPO_TOKEN: ${{ secrets.MANIFEST_REPO_TOKEN }}
+      # Write-enabled deploy key of HuntingYuk/k3s-manifest (repo-scoped, no expiry).
+      MANIFEST_DEPLOY_KEY: ${{ secrets.MANIFEST_DEPLOY_KEY }}
     steps:
-      - name: Skip manifest update when token is unavailable
-        if: ${{ env.MANIFEST_REPO_TOKEN == '' }}
-        run: echo "MANIFEST_REPO_TOKEN is not set. Skipping manifest update job."
+      - name: Skip manifest update when deploy key is unavailable
+        if: ${{ env.MANIFEST_DEPLOY_KEY == '' }}
+        run: echo "MANIFEST_DEPLOY_KEY is not set. Skipping manifest update job."
 
       - name: Checkout manifest repo
-        if: ${{ env.MANIFEST_REPO_TOKEN != '' }}
+        if: ${{ env.MANIFEST_DEPLOY_KEY != '' }}
         uses: actions/checkout@v4
         with:
           repository: HuntingYuk/k3s-manifest
-          token: ${{ env.MANIFEST_REPO_TOKEN }}
+          ssh-key: ${{ env.MANIFEST_DEPLOY_KEY }}
           path: manifest-repo
 
       - name: Update deployment image tag
-        if: ${{ env.MANIFEST_REPO_TOKEN != '' }}
+        if: ${{ env.MANIFEST_DEPLOY_KEY != '' }}
         run: |
           TARGET_DIR="manifest-repo/projects/${APP_NAME}"
           DEPLOY_FILE="${TARGET_DIR}/deployment.yaml"
@@ -225,7 +226,7 @@ jobs:
           IMAGE_REF: ${{ needs.build-and-push.outputs.image_ref }}
 
       - name: Commit and push manifest updates
-        if: ${{ env.MANIFEST_REPO_TOKEN != '' }}
+        if: ${{ env.MANIFEST_DEPLOY_KEY != '' }}
         run: |
           cd manifest-repo
           git config user.name "github-actions[bot]"
