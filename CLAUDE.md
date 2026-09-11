@@ -163,10 +163,10 @@ every 1m) and applies `projects/dashboard-cve/deployment.yaml` into namespace `d
 
 - All GitRepos share one basic-auth secret, `fleet-local/auth-fnmw4` (user `luhtaf`, password = a
   classic PAT with `repo` + `read:packages`). The image pull secret `default/ghcr-secret` holds the
-  same PAT. Both were set on 2026-09-11 with a one-year expiry, so **they expire around
-  2027-09-11**. When Fleet reports "authentication required: Invalid username or token" on every
-  GitRepo, this token has expired; deploys stop silently (it happened from 2026-07-06 to
-  2026-09-11).
+  same PAT. Both were set on 2026-09-11 with a token that has **no expiration**. If it is ever
+  revoked or rotated, Fleet reports "authentication required: Invalid username or token" on every
+  GitRepo and deploys stop silently (that happened from 2026-07-06 to 2026-09-11 when the previous,
+  expiring token lapsed).
 - Fine-grained PATs do not work here: GHCR only accepts classic PATs, and the org rejected the
   fine-grained token for its repos.
 - Outbound TCP 22 from the cluster is blocked (`ssh.github.com:443` too), so Fleet must use HTTPS.
