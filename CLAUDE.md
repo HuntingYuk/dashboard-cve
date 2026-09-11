@@ -147,8 +147,32 @@ ships.
 2. `build-and-push` — builds the image, Trivy-scans it with the same gate, then pushes to
    `ghcr.io/<owner>/<repo>:<VERSION>` and `:latest`. Skipped on pull requests.
 3. `update-manifest` — rewrites the `image:` line in `projects/<repo-name>/deployment.yaml` in the
-   `HuntingYuk/k3s-manifest` repo, which Flux CD then rolls out. Requires the `MANIFEST_REPO_TOKEN`
-   secret; silently skipped when absent.
+   `HuntingYuk/k3s-manifest` repo over SSH using the `MANIFEST_DEPLOY_KEY` secret (a write-enabled
+   deploy key of that repo; org deploy keys were enabled on 2026-09-09 for this). Silently skipped
+   when the secret is absent.
+
+Third-party actions are pinned to commit SHAs with a version comment. `aquasecurity/trivy-action`
+has had tags deleted upstream before; check that every `uses:` ref still resolves before assuming
+CI will pass.
+
+### Cluster side (Rancher Fleet, not Flux)
+
+The `kubeth` cluster (kube context `kubeth`) runs **Rancher Fleet**, which watches
+`HuntingYuk/k3s-manifest` via GitRepo objects in namespace `fleet-local` (one per project, polling
+every 1m) and applies `projects/dashboard-cve/deployment.yaml` into namespace `default`.
+
+- All GitRepos share one basic-auth secret, `fleet-local/auth-fnmw4` (user `luhtaf`, password = a
+  classic PAT with `repo` + `read:packages`). The image pull secret `default/ghcr-secret` holds the
+  same PAT. Both were set on 2026-09-11 with a one-year expiry, so **they expire around
+  2027-09-11**. When Fleet reports "authentication required: Invalid username or token" on every
+  GitRepo, this token has expired; deploys stop silently (it happened from 2026-07-06 to
+  2026-09-11).
+- Fine-grained PATs do not work here: GHCR only accepts classic PATs, and the org rejected the
+  fine-grained token for its repos.
+- Outbound TCP 22 from the cluster is blocked (`ssh.github.com:443` too), so Fleet must use HTTPS.
+  SSH deploy keys were tried and reverted.
+- Quick health check: `kubectl --context kubeth get gitrepos.fleet.cattle.io -n fleet-local` should
+  show the latest manifest commit and `GitPolling True`.
 
 `dashboard-cve.service` is a systemd unit for a bare-VM deployment using the venv; paths and user in
 it are placeholders that must be edited per host.
